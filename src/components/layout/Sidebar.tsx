@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
@@ -21,7 +22,7 @@ const utilities = [
   { href: '/dashboard', icon: Settings, label: 'Settings' },
 ];
 
-export default function Sidebar() {
+function SidebarInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeType = searchParams.get('type');
@@ -73,5 +74,13 @@ export default function Sidebar() {
         </div>
       </div>
     </aside>
+  );
+}
+
+export default function Sidebar() {
+  return (
+    <Suspense>
+      <SidebarInner />
+    </Suspense>
   );
 }
