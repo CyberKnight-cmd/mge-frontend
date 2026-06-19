@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-surface text-on-surface font-sans;
+  }
+
+  ::-webkit-scrollbar       { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #f0edee; }
+  ::-webkit-scrollbar-thumb { background: #0f1c2c; }
+}
+
+@layer components {
+  /* Shared structural helpers */
+  .page-container {
+    @apply max-w-container mx-auto px-margin-mobile md:px-margin-desktop;
+  }
+
+  /* Top-bar stripe used in card headers */
+  .card-top-bar::before {
+    content: '';
+    @apply absolute top-0 left-0 w-full h-[4px] bg-primary;
+  }
+
+  /* Dot-grid hero background */
+  .dot-grid {
+    background-image: radial-gradient(circle, #ffffff 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* Hero gradient */
+  .hero-bg {
+    background-color: #0f1c2c;
+    background-image:
+      radial-gradient(at 0% 0%,   hsla(210,48%,15%,1) 0, transparent 60%),
+      radial-gradient(at 100% 100%, hsla(215,30%,10%,0.8) 0, transparent 50%);
+  }
+
+  /* Matrix dot background (pricing page) */
+  .matrix-bg {
+    background-image: radial-gradient(circle at 2px 2px, #c4c6cc 1px, transparent 0);
+    background-size: 24px 24px;
+  }
+
+  /* Sidebar item active state */
+  .sidebar-item-active {
+    @apply bg-tertiary-container text-on-tertiary-container border-l-4 border-primary;
+  }
+  .sidebar-item {
+    @apply text-on-surface-variant hover:bg-surface-container-highest transition-colors;
+  }
+
+  /* Gold-left-border accent (kept for specific card callouts) */
+  .accent-left {
+    border-left: 3px solid #bac8dc;
+  }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+}
