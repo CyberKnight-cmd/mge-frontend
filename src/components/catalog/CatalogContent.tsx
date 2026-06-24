@@ -34,6 +34,7 @@ interface CatalystSearchResult {
   pdPpm: number | null;
   rhPpm: number | null;
   weightPerPieceGrams: number | null;
+  terms: number | null;
   valuation?: Valuation | null;
 }
 
