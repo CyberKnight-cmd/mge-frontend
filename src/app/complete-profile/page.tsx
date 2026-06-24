@@ -46,7 +46,7 @@ export default function CompleteProfilePage() {
         companyName: company.trim(),
         profileCompleted: true,
       });
-      router.push('/');
+      window.location.href = '/';
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
     } finally {
