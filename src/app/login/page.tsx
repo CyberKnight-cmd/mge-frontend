@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, type Variants } from 'framer-motion';
@@ -14,18 +14,54 @@ const panelAnim: Variants = { hidden: { opacity: 0, x: 40 }, visible: { opacity:
 const stagger: Variants   = { visible: { transition: { staggerChildren: 0.08, delayChildren: 0.15 } } };
 const fieldAnim: Variants = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
 
-const marketData = [
-  { label: 'PLATINUM / USD',  price: '942.30',   chg: '+1.4%', up: true  },
-  { label: 'PALLADIUM / USD', price: '1,014.15', chg: '−0.8%', up: false },
-  { label: 'RHODIUM / USD',   price: '4,500.00', chg: '0.0%',  up: null  },
-  { label: 'Pt INDEX (30d)',  price: '958.20',   chg: '+3.2%', up: true  },
+interface MarketTile {
+  label: string;
+  price: string;
+  chg: string;
+  up: boolean | null;
+}
+
+const FALLBACK_MARKET: MarketTile[] = [
+  { label: 'PLATINUM / USD',  price: '—', chg: '', up: null },
+  { label: 'PALLADIUM / USD', price: '—', chg: '', up: null },
+  { label: 'RHODIUM / USD',   price: '—', chg: '', up: null },
 ];
+
+const SYMBOL_LABEL: Record<string, string> = {
+  XPT: 'PLATINUM / USD',
+  XPD: 'PALLADIUM / USD',
+  XRH: 'RHODIUM / USD',
+};
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8080';
 
 export default function LoginPage() {
   const router = useRouter();
   const { login, register } = useAuth();
+
+  const [marketData, setMarketData] = useState<MarketTile[]>(FALLBACK_MARKET);
+
+  useEffect(() => {
+    fetch('/api/v1/metals/prices')
+      .then(r => r.ok ? r.json() : null)
+      .then(body => {
+        const prices: Array<{ symbol: string; priceUsd?: number; changePct?: number }> =
+          (body?.data ?? body)?.prices ?? [];
+        const tiles: MarketTile[] = prices
+          .filter(p => SYMBOL_LABEL[p.symbol] && p.priceUsd != null)
+          .map(p => {
+            const chgPct = p.changePct ?? 0;
+            return {
+              label: SYMBOL_LABEL[p.symbol],
+              price: p.priceUsd!.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+              chg: chgPct === 0 ? '0.0%' : `${chgPct > 0 ? '+' : ''}${chgPct.toFixed(1)}%`,
+              up: chgPct > 0 ? true : chgPct < 0 ? false : null,
+            };
+          });
+        if (tiles.length > 0) setMarketData(tiles);
+      })
+      .catch(() => {});
+  }, []);
 
   const [tab, setTab]           = useState<'login' | 'register'>('login');
   const [showPwd, setShowPwd]   = useState(false);
@@ -51,7 +87,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(loginEmail, loginPassword);
-      router.push('/dashboard');
+      router.push('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed. Check your credentials.');
     } finally {
@@ -78,7 +114,7 @@ export default function LoginPage() {
         country:     reg.country   || undefined,
         gstNumber:   reg.gstNumber || undefined,
       });
-      router.push('/dashboard');
+      router.push('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed. Please try again.');
     } finally {
@@ -132,7 +168,7 @@ export default function LoginPage() {
             ))}
           </div>
           <p className="text-label-caps font-label-caps text-on-primary-container/50 mt-8">
-            DATA PROVIDED BY LPPM · LME SETTLEMENT
+            LIVE SPOT PRICES · LBMA
           </p>
         </div>
       </div>
@@ -287,7 +323,7 @@ export default function LoginPage() {
               animate="visible"
               key="register-form"
             >
-              <motion.div className="grid grid-cols-2 gap-4" variants={fieldAnim}>
+              <motion.div className="grid grid-cols-1 sm:grid-cols-2 gap-4" variants={fieldAnim}>
                 <div>
                   <label className="block text-label-caps font-label-caps text-on-surface-variant mb-1.5">FIRST NAME <span className="text-error">*</span></label>
                   <input type="text" value={reg.firstName} onChange={setR('firstName')} required className="w-full border border-outline-variant bg-surface px-4 py-3 text-body-md focus:border-primary focus:ring-0 focus:outline-none" />
@@ -342,7 +378,7 @@ export default function LoginPage() {
               </motion.div>
 
               {/* Optional fields */}
-              <motion.div className="grid grid-cols-2 gap-4" variants={fieldAnim}>
+              <motion.div className="grid grid-cols-1 sm:grid-cols-2 gap-4" variants={fieldAnim}>
                 <div>
                   <label className="block text-label-caps font-label-caps text-on-surface-variant mb-1.5">COUNTRY</label>
                   <input type="text" value={reg.country} onChange={setR('country')} placeholder="India" className="w-full border border-outline-variant bg-surface px-4 py-3 text-body-md focus:border-primary focus:ring-0 focus:outline-none" />
@@ -357,9 +393,9 @@ export default function LoginPage() {
                 <input type="checkbox" id="terms" required className="w-4 h-4 mt-0.5 border-outline-variant text-primary focus:ring-0 rounded-none shrink-0" />
                 <label htmlFor="terms" className="text-body-sm text-on-surface-variant select-none">
                   I agree to Mayank Global Exports&apos;{' '}
-                  <Link href="#" className="text-primary hover:underline font-semibold">Terms of Trade</Link>{' '}
+                  <Link href="/terms" className="text-primary hover:underline font-semibold">Terms of Trade</Link>{' '}
                   and{' '}
-                  <Link href="#" className="text-primary hover:underline font-semibold">Privacy Policy</Link>
+                  <Link href="/privacy" className="text-primary hover:underline font-semibold">Privacy Policy</Link>
                 </label>
               </motion.div>
 

@@ -5,6 +5,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from 'recharts';
+import { useAuth } from '@/context/AuthContext';
 
 type Period = '1D' | '1W' | '1M' | 'YTD';
 
@@ -79,6 +80,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 // ── Main component ───────────────────────────────────────────────────────────
 export default function PGMChart() {
+  const { authFetch } = useAuth();
   const [period, setPeriod]           = useState<Period>('1M');
   const [chartData, setChartData]     = useState<ChartPoint[]>([]);
   const [spots, setSpots]             = useState<SpotMetal[]>([]);
@@ -89,7 +91,7 @@ export default function PGMChart() {
 
   const fetchPrices = useCallback(async () => {
     try {
-      const res  = await fetch('/api/v1/metals/prices');
+      const res  = await authFetch('/api/v1/metals/prices');
       const body = await res.json();
       if (body.success && body.data) {
         setSpots(body.data.prices ?? []);
@@ -98,12 +100,12 @@ export default function PGMChart() {
         }));
       }
     } catch {}
-  }, []);
+  }, [authFetch]);
 
   const fetchHistory = useCallback(async (p: Period) => {
     setChartLoading(true);
     try {
-      const res  = await fetch(`/api/v1/metals/history?period=${p}`);
+      const res  = await authFetch(`/api/v1/metals/history?period=${p}`);
       const body = await res.json();
       if (body.success && body.data) {
         const d: HistoryBody = body.data;
@@ -125,7 +127,7 @@ export default function PGMChart() {
       setChartData([]);
     }
     setChartLoading(false);
-  }, []);
+  }, [authFetch]);
 
   useEffect(() => {
     fetchPrices();

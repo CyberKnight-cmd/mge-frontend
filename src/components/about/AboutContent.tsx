@@ -10,18 +10,12 @@ const fadeRight: Variants= { hidden: { opacity: 0, x: 40 },  visible: { opacity:
 const stagger: Variants  = { visible: { transition: { staggerChildren: 0.12 } } };
 const cardAnim: Variants = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.45 } } };
 
-const certifications = [
-  { num: '01', title: 'ISO 9001:2015 COMPLIANCE',  desc: 'Strict adherence to Quality Management Systems across all export nodes.' },
-  { num: '02', title: 'METALLURGICAL ANALYSIS',    desc: 'On-site spectroscopy and stress-testing for all industrial foil shipments.' },
-  { num: '03', title: 'REACH & ROHS VERIFIED',     desc: 'Full chemical documentation for hazardous material handling and safety.' },
-  { num: '04', title: 'AEO CERTIFIED OPERATOR',    desc: 'Authorized Economic Operator status across EU, UK, and APAC customs.' },
-];
 
 const dataTerminal = [
-  { label: 'Avg Transit Time',   val: '14.2 Days' },
-  { label: 'Compliance Rate',    val: '99.98%'    },
-  { label: 'Vessel Utilization', val: '88%'        },
-  { label: 'Active Port Nodes',  val: '142'        },
+  { label: 'Supplier Network',   val: '50-60'  },
+  { label: 'Buyer Network',      val: '100+'   },
+  { label: 'Countries Served',   val: '3'      },
+  { label: 'Compliance Rate',    val: '95%'    },
 ];
 
 const envStats = [
@@ -32,10 +26,10 @@ const envStats = [
 ];
 
 const bigStats = [
-  { value: '30+',   label: 'Years of Operation' },
-  { value: '142',   label: 'Active Port Nodes'  },
-  { value: '48',    label: 'Countries Served'   },
-  { value: '99.98%',label: 'Compliance Rate'    },
+  { value: '10+',  label: 'Years of Operation' },
+  { value: '60+',  label: 'Supplier Contacts'  },
+  { value: '3',    label: 'Countries Served'   },
+  { value: '95%',  label: 'Compliance Rate'    },
 ];
 
 export default function AboutContent() {
@@ -48,7 +42,7 @@ export default function AboutContent() {
           {/* ── Hero ── */}
           <div className="mb-24 grid md:grid-cols-2 gap-12 items-center">
             <motion.div initial="hidden" animate="visible" variants={fadeLeft}>
-              <div className="inline-block px-2 py-1 bg-primary text-on-primary text-label-caps font-label-caps mb-4">ESTABLISHED 1994</div>
+              <div className="inline-block px-2 py-1 bg-primary text-on-primary text-label-caps font-label-caps mb-4">ESTABLISHED 2016</div>
               <h1 className="text-headline-lg font-headline-lg text-primary mb-6 leading-tight">
                 Global Precision In<br />Industrial Logistics
               </h1>
@@ -66,7 +60,7 @@ export default function AboutContent() {
                 <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'radial-gradient(circle, #bac8dc 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
                 <div className="text-center relative z-10">
                   <Globe size={72} className="text-on-primary-container/30 mx-auto mb-4" />
-                  <span className="font-mono text-[13px] text-on-primary-container">142 ACTIVE NODES · SYSTEM V4.0</span>
+                  <span className="font-mono text-[13px] text-on-primary-container">60+ CONTACTS · 3 COUNTRIES</span>
                 </div>
               </div>
             </motion.div>
@@ -93,7 +87,7 @@ export default function AboutContent() {
             <h2 className="text-headline-md font-headline-md text-primary mb-1 border-l-4 border-primary pl-4 uppercase tracking-wide">
               Logistics Infrastructure
             </h2>
-            <p className="text-body-md text-secondary mb-8 pl-5">Operating across 4 continents with integrated tracking systems.</p>
+            <p className="text-body-md text-secondary mb-8 pl-5">Operating across India and abroad with a network of 60+ suppliers and 100+ buyers.</p>
 
             <motion.div
               className="grid grid-cols-1 md:grid-cols-3 md:grid-rows-2 gap-4"
@@ -104,9 +98,9 @@ export default function AboutContent() {
                 <div>
                   <Globe size={36} className="text-primary mb-4" />
                   <h3 className="text-headline-sm font-headline-sm mb-2">Intercontinental Network</h3>
-                  <p className="text-body-md text-on-surface-variant max-w-md">Our proprietary routing algorithms optimize lead times for precious metals and sensitive chemical exports across 48 key maritime ports.</p>
+                  <p className="text-body-md text-on-surface-variant max-w-md">Our network spans across India with suppliers and buyers in 3 countries, enabling seamless sourcing and distribution of catalytic converters.</p>
                 </div>
-                <div className="mt-4 font-mono text-[13px] text-primary">NODES: 142 ACTIVE | SYSTEM: V4.0</div>
+                <div className="mt-4 font-mono text-[13px] text-primary">SUPPLIERS: 60+ | BUYERS: 100+ | COUNTRIES: 3</div>
               </motion.div>
 
               <motion.div variants={cardAnim} className="md:row-span-2 bg-primary-container relative overflow-hidden flex flex-col justify-end p-6">
@@ -145,36 +139,6 @@ export default function AboutContent() {
             </motion.div>
           </motion.div>
 
-          {/* ── Quality Protocols ── */}
-          <motion.div
-            className="mb-24 py-14 px-10 bg-inverse-surface text-inverse-on-surface relative overflow-hidden"
-            initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }} variants={fadeUp}
-          >
-            <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'radial-gradient(circle, #ffffff 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
-            <div className="grid md:grid-cols-2 gap-12 items-center relative z-10">
-              <div className="bg-primary-container h-72 flex items-center justify-center order-2 md:order-1">
-                <ShieldCheck size={80} className="text-on-primary-container/30" />
-              </div>
-              <div className="order-1 md:order-2">
-                <h2 className="text-headline-md font-headline-md mb-6">Rigorous Quality Protocols</h2>
-                <p className="text-body-lg mb-8 opacity-80">Every gram of metal and every micron of substrate meets stringent global industrial standards.</p>
-                <motion.div className="space-y-6" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={stagger}>
-                  {certifications.map(({ num, title, desc }) => (
-                    <motion.div key={num} variants={cardAnim} className="flex gap-4 items-start">
-                      <div className="w-11 h-11 flex items-center justify-center border border-primary-fixed shrink-0">
-                        <span className="text-headline-sm font-semibold">{num}</span>
-                      </div>
-                      <div>
-                        <h4 className="text-label-caps font-label-caps mb-1">{title}</h4>
-                        <p className="text-body-sm opacity-70 leading-relaxed">{desc}</p>
-                      </div>
-                    </motion.div>
-                  ))}
-                </motion.div>
-              </div>
-            </div>
-          </motion.div>
-
           {/* ── Sustainability ── */}
           <motion.div
             className="mb-24"
@@ -205,20 +169,15 @@ export default function AboutContent() {
 
           {/* ── Contact ── */}
           <motion.div
-            className="grid md:grid-cols-2 gap-8"
-            initial="hidden" whileInView="visible" viewport={{ once: true }} variants={stagger}
+            initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}
           >
-            {[
-              { city: 'Mumbai HQ', addr: 'Bandra-Kurla Complex, Mumbai 400051, India', phone: '+91 22 6600 0000', email: 'trade@mayankg.com' },
-              { city: 'London Office', addr: '1 Canada Square, Canary Wharf, London E14 5AB', phone: '+44 20 7946 0000', email: 'europe@mayankg.com' },
-            ].map(({ city, addr, phone, email }) => (
-              <motion.div key={city} variants={cardAnim} whileHover={{ y: -3, transition: { duration: 0.2 } }} className="bg-surface-container border border-outline-variant p-8 hover:border-primary transition-colors">
-                <h3 className="text-headline-sm font-headline-sm mb-2">{city}</h3>
-                <p className="text-body-md text-on-surface-variant mb-4">{addr}</p>
-                <div className="font-mono text-[13px] text-secondary">{phone}</div>
-                <div className="font-mono text-[13px] text-secondary mt-1">{email}</div>
-              </motion.div>
-            ))}
+            <motion.div variants={cardAnim} whileHover={{ y: -3, transition: { duration: 0.2 } }} className="bg-surface-container border border-outline-variant p-8 hover:border-primary transition-colors max-w-lg">
+              <h3 className="text-headline-sm font-headline-sm mb-2">New Delhi HQ</h3>
+              <p className="text-body-md text-on-surface-variant mb-4">New Delhi, India</p>
+              <div className="font-mono text-[13px] text-secondary mb-1">+91 9331668029</div>
+              <div className="font-mono text-[13px] text-secondary">manojsahu@mayankglobalexports.com</div>
+              <div className="font-mono text-[13px] text-secondary mt-1">bijaygupta@mayankglobalexports.com</div>
+            </motion.div>
           </motion.div>
 
         </div>

@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import {
   LayoutGrid, Grid2X2, Layers, Settings2, Square, Cylinder, CircleDot, Settings,
 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 const categories = [
   { href: '/catalog',                  icon: LayoutGrid, label: 'All Types'     },
@@ -18,14 +19,12 @@ const categories = [
   { href: '/catalog?type=OTHER',       icon: CircleDot,  label: 'Other'         },
 ];
 
-const utilities = [
-  { href: '/dashboard', icon: Settings, label: 'Settings' },
-];
-
 function SidebarInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeType = searchParams.get('type');
+  const { user } = useAuth();
+  const canViewDashboard = user?.role === 'ADMIN' || user?.role === 'OWNER';
 
   return (
     <aside className="hidden lg:flex flex-col fixed left-0 top-16 h-[calc(100vh-64px)] w-[240px] bg-surface-container border-r border-outline-variant overflow-y-auto">
@@ -58,21 +57,20 @@ function SidebarInner() {
         })}
       </div>
 
-      {/* Utility links */}
-      <div className="mt-auto border-t border-outline-variant">
-        <div className="pb-4 px-4 pt-4 flex flex-col gap-1">
-          {utilities.map(({ href, icon: Icon, label }) => (
+      {/* Dashboard link — admin/owner only */}
+      {canViewDashboard && (
+        <div className="mt-auto border-t border-outline-variant">
+          <div className="pb-4 px-4 pt-4 flex flex-col gap-1">
             <Link
-              key={label}
-              href={href}
+              href="/dashboard"
               className="flex items-center gap-3 py-2 text-body-sm text-on-surface-variant hover:text-primary transition-colors"
             >
-              <Icon size={16} />
-              {label}
+              <Settings size={16} />
+              Dashboard
             </Link>
-          ))}
+          </div>
         </div>
-      </div>
+      )}
     </aside>
   );
 }

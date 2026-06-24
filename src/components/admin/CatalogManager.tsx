@@ -21,6 +21,7 @@ interface Entry {
   pdPpm: number | null;
   rhPpm: number | null;
   weightPerPieceGrams: number | null;
+  terms: number | null;
   imageCount: number;
 }
 
@@ -35,6 +36,7 @@ interface FormState {
   pdPpm: string;
   rhPpm: string;
   weightPerPieceGrams: string;
+  terms: string;
 }
 
 const TYPES: CatalystType[] = ['CERAMIC', 'DPF', 'CERAMIC_DPF', 'FOIL', 'SET', 'STEEL', 'OTHER'];
@@ -46,7 +48,7 @@ const TYPE_LABEL: Record<CatalystType, string> = {
 const EMPTY_FORM: FormState = {
   manufacturer: '', manufacturerBrand: '', region: '',
   primaryCode: '', secondaryCode: '', catalystType: 'OTHER',
-  ptPpm: '', pdPpm: '', rhPpm: '', weightPerPieceGrams: '',
+  ptPpm: '', pdPpm: '', rhPpm: '', weightPerPieceGrams: '', terms: '70',
 };
 
 function formFromEntry(e: Entry): FormState {
@@ -61,6 +63,7 @@ function formFromEntry(e: Entry): FormState {
     pdPpm:              e.pdPpm != null ? String(e.pdPpm) : '',
     rhPpm:              e.rhPpm != null ? String(e.rhPpm) : '',
     weightPerPieceGrams: e.weightPerPieceGrams != null ? String(e.weightPerPieceGrams) : '',
+    terms: e.terms != null ? String(e.terms) : '70',
   };
 }
 
@@ -209,13 +212,17 @@ function EntryModal({
             </div>
           </div>
 
-          {/* Weight */}
+          {/* Weight & Terms */}
           <div>
-            <p className="text-label-caps font-label-caps text-[10px] text-outline mb-3 border-b border-outline-variant pb-1">PHYSICAL</p>
+            <p className="text-label-caps font-label-caps text-[10px] text-outline mb-3 border-b border-outline-variant pb-1">PHYSICAL & TERMS</p>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelCls}>Weight per Piece (grams)</label>
                 <input type="number" min="0" className={inputCls} value={form.weightPerPieceGrams} onChange={set('weightPerPieceGrams')} placeholder="e.g. 850" />
+              </div>
+              <div>
+                <label className={labelCls}>Terms (%)</label>
+                <input type="number" min="0" max="100" step="0.1" className={inputCls} value={form.terms} onChange={set('terms')} placeholder="70" />
               </div>
             </div>
           </div>
@@ -329,7 +336,7 @@ export default function CatalogManager() {
     try {
       const params = new URLSearchParams({ page: String(p), size: '20' });
       if (query) params.set('q', query);
-      const res  = await fetch(`/api/v1/catalog/search?${params}`);
+      const res  = await authFetch(`/api/v1/catalog/search?${params}`);
       const body = await res.json();
       if (body.success) {
         setEntries(body.data.content ?? []);
@@ -338,7 +345,7 @@ export default function CatalogManager() {
       }
     } catch {}
     setLoading(false);
-  }, []);
+  }, [authFetch]);
 
   useEffect(() => { load(page, q); }, [page, q, load]);
 
@@ -380,6 +387,7 @@ export default function CatalogManager() {
         pdPpm:               parseNum(form.pdPpm),
         rhPpm:               parseNum(form.rhPpm),
         weightPerPieceGrams: parseNum(form.weightPerPieceGrams),
+        terms:               parseNum(form.terms),
       };
 
       const url    = modal === 'add' ? '/api/v1/catalog' : `/api/v1/catalog/${editTarget!.id}`;

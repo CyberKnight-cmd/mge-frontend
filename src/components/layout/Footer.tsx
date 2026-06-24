@@ -26,7 +26,7 @@ export default function Footer() {
           <p className="text-body-sm text-on-primary-container leading-relaxed mb-4">
             The premier B2B marketplace for catalytic converter recycling and precious metal exchange. Search by OEM code. Trade on real Pt, Pd, Rh data.
           </p>
-          <div className="text-label-caps text-on-primary-container">Est. 1994 · Mumbai, India</div>
+          <div className="text-label-caps text-on-primary-container">Est. 1994 · New Delhi, India</div>
         </div>
 
         {/* Link columns */}
@@ -55,11 +55,9 @@ export default function Footer() {
           © {new Date().getFullYear()} Mayank Global Exports. All rights reserved.
         </p>
         <div className="flex gap-8 text-label-caps text-on-primary-container">
-          {['Privacy', 'Terms', 'Legal'].map((item) => (
-            <Link key={item} href="#" className="hover:text-on-primary transition-colors">
-              {item}
-            </Link>
-          ))}
+          <Link href="/privacy" className="hover:text-on-primary transition-colors">Privacy</Link>
+          <Link href="/terms" className="hover:text-on-primary transition-colors">Terms</Link>
+          <Link href="/terms#liability" className="hover:text-on-primary transition-colors">Legal</Link>
         </div>
       </div>
     </footer>

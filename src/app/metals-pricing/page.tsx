@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import Sidebar from '@/components/layout/Sidebar';
 import { BarChart3, TrendingUp, TrendingDown, Minus, AlertCircle, RefreshCw } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,7 @@ const stagger: import('framer-motion').Variants = { visible: { transition: { sta
 // ── Component ───────────────────────────────────────────────────────────────
 
 export default function MetalsPricingPage() {
+  const { authFetch } = useAuth();
   const [data, setData]             = useState<MetalsPricingResponse | null>(null);
   const [loadError, setLoadError]   = useState('');
   const [activePeriod, setActivePeriod] = useState<Period>('1D');
@@ -72,7 +74,7 @@ export default function MetalsPricingPage() {
 
     async function fetchPrices() {
       try {
-        const res  = await fetch('/api/v1/metals/prices');
+        const res  = await authFetch('/api/v1/metals/prices');
         const body = await res.json();
         if (cancelled) return;
         if (!res.ok) throw new Error(body.message ?? 'Failed to load prices');

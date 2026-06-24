@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Loader2 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 interface Suggestion {
   id: number;
@@ -25,6 +26,7 @@ interface Props {
 
 export default function CatalogSearchBox({ variant, onNavigate }: Props) {
   const router = useRouter();
+  const { authFetch } = useAuth();
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -42,7 +44,7 @@ export default function CatalogSearchBox({ variant, onNavigate }: Props) {
   useEffect(() => {
     if (!debounced) { setSuggestions([]); return; }
     setLoading(true);
-    fetch(`/api/v1/catalog/search?q=${encodeURIComponent(debounced)}&size=6&page=0`)
+    authFetch(`/api/v1/catalog/search?q=${encodeURIComponent(debounced)}&size=6&page=0`)
       .then(r => r.json())
       .then(b => setSuggestions(b.data?.content ?? []))
       .catch(() => setSuggestions([]))
@@ -117,7 +119,7 @@ export default function CatalogSearchBox({ variant, onNavigate }: Props) {
           <button
             type="button"
             onClick={submitSearch}
-            className="bg-white text-primary font-label-caps font-bold px-8 py-4 hover:bg-white/90 transition-colors whitespace-nowrap"
+            className="bg-white text-primary font-label-caps font-bold px-4 sm:px-8 py-3 sm:py-4 hover:bg-white/90 transition-colors whitespace-nowrap"
           >
             SEARCH
           </button>

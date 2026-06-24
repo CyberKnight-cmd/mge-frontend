@@ -11,6 +11,7 @@ export interface AuthUser {
   companyName: string;
   authProvider: string;
   emailVerified?: boolean;
+  profileCompleted?: boolean;
 }
 
 interface RegisterData {
@@ -36,6 +37,7 @@ interface AuthContextType {
   authHeaders: () => Record<string, string>;
   authFetch: (url: string, init?: RequestInit) => Promise<Response>;
   setAuthFromOAuth: (accessToken: string, refreshToken: string, user: AuthUser) => void;
+  updateUser: (updates: Partial<AuthUser>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -65,6 +67,14 @@ function clear() {
   localStorage.removeItem(STORAGE_KEY);
 }
 
+function setCookie(user: AuthUser | null) {
+  if (user) {
+    document.cookie = `mge_logged_in=${user.profileCompleted ? '1' : 'pending'}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
+  } else {
+    document.cookie = 'mge_logged_in=; path=/; max-age=0';
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -75,17 +85,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const stored = load();
     if (stored?.user && stored?.accessToken) {
+      accessTokenRef.current = stored.accessToken;
       setUser(stored.user);
       setAccessToken(stored.accessToken);
+      setCookie(stored.user);
     }
     setIsLoading(false);
   }, []);
 
   const applyAuth = useCallback((stored: StoredAuth) => {
     save(stored);
+    setCookie(stored.user);
+    accessTokenRef.current = stored.accessToken;
     setUser(stored.user);
     setAccessToken(stored.accessToken);
   }, []);
+
+  function buildUser(d: any): AuthUser {
+    return {
+      email: d.email,
+      firstName: d.firstName,
+      lastName: d.lastName,
+      role: d.role,
+      companyName: d.companyName ?? '',
+      authProvider: d.authProvider ?? 'LOCAL',
+      emailVerified: d.emailVerified ?? false,
+      profileCompleted: d.profileCompleted ?? false,
+    };
+  }
 
   const login = useCallback(async (email: string, password: string) => {
     const res = await fetch('/api/v1/auth/login', {
@@ -96,18 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const body = await res.json();
     if (!res.ok) throw new Error(body.message ?? 'Login failed');
     const d = body.data ?? body;
-    applyAuth({
-      accessToken: d.accessToken,
-      refreshToken: d.refreshToken,
-      user: {
-        email: d.email,
-        firstName: d.firstName,
-        lastName: d.lastName,
-        role: d.role,
-        companyName: d.companyName ?? '',
-        authProvider: d.authProvider ?? 'LOCAL',
-      },
-    });
+    applyAuth({ accessToken: d.accessToken, refreshToken: d.refreshToken, user: buildUser(d) });
   }, [applyAuth]);
 
   const register = useCallback(async (data: RegisterData) => {
@@ -119,24 +135,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const body = await res.json();
     if (!res.ok) throw new Error(body.message ?? 'Registration failed');
     const d = body.data ?? body;
-    applyAuth({
-      accessToken: d.accessToken,
-      refreshToken: d.refreshToken,
-      user: {
-        email: d.email,
-        firstName: d.firstName,
-        lastName: d.lastName,
-        role: d.role,
-        companyName: d.companyName ?? '',
-        authProvider: d.authProvider ?? 'LOCAL',
-      },
-    });
+    applyAuth({ accessToken: d.accessToken, refreshToken: d.refreshToken, user: buildUser(d) });
   }, [applyAuth]);
 
   const logout = useCallback(() => {
     clear();
+    setCookie(null);
     setUser(null);
     setAccessToken(null);
+  }, []);
+
+  const updateUser = useCallback((updates: Partial<AuthUser>) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...updates };
+      const stored = load();
+      if (stored) {
+        save({ ...stored, user: updated });
+        setCookie(updated);
+      }
+      return updated;
+    });
   }, []);
 
   useEffect(() => { accessTokenRef.current = accessToken; }, [accessToken]);
@@ -144,6 +163,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const authHeaders = useCallback((): Record<string, string> => {
     return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
   }, [accessToken]);
+
+  const refreshingRef = useRef<Promise<string | null> | null>(null);
+
+  const tryRefresh = useCallback(async (): Promise<string | null> => {
+    const stored = load();
+    if (!stored?.refreshToken) return null;
+    try {
+      const res = await fetch('/api/v1/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: stored.refreshToken }),
+      });
+      if (!res.ok) return null;
+      const body = await res.json();
+      const d = body.data ?? body;
+      const newStored: StoredAuth = {
+        accessToken: d.accessToken,
+        refreshToken: d.refreshToken,
+        user: buildUser(d),
+      };
+      save(newStored);
+      setCookie(newStored.user);
+      setUser(newStored.user);
+      setAccessToken(d.accessToken);
+      accessTokenRef.current = d.accessToken;
+      return d.accessToken;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const authFetch = useCallback(async (url: string, init?: RequestInit): Promise<Response> => {
     const token = accessTokenRef.current;
@@ -153,13 +202,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
     const res = await fetch(url, { ...init, headers });
     if (res.status === 401) {
+      if (!refreshingRef.current) {
+        refreshingRef.current = tryRefresh().finally(() => { refreshingRef.current = null; });
+      }
+      const newToken = await refreshingRef.current;
+      if (newToken) {
+        const retryHeaders: Record<string, string> = {
+          ...(init?.headers as Record<string, string>),
+          Authorization: `Bearer ${newToken}`,
+        };
+        return fetch(url, { ...init, headers: retryHeaders });
+      }
       clear();
+      setCookie(null);
       setUser(null);
       setAccessToken(null);
       router.push('/login');
     }
     return res;
-  }, [router]);
+  }, [router, tryRefresh]);
 
   const setAuthFromOAuth = useCallback((token: string, refreshToken: string, u: AuthUser) => {
     applyAuth({ accessToken: token, refreshToken, user: u });
@@ -170,7 +231,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user, accessToken,
       isAuthenticated: !!user && !!accessToken,
       isLoading,
-      login, register, logout, authHeaders, authFetch, setAuthFromOAuth,
+      login, register, logout, authHeaders, authFetch, setAuthFromOAuth, updateUser,
     }}>
       {children}
     </AuthContext.Provider>

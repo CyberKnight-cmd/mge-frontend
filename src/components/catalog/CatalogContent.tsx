@@ -7,13 +7,19 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Sidebar from '@/components/layout/Sidebar';
 import {
   Search, ChevronRight, ChevronLeft, X, Loader2,
-  Plus, Pencil, Trash2, AlertCircle, CheckCircle2, ChevronsUpDown,
+  Plus, Pencil, Trash2, AlertCircle, CheckCircle2, ChevronsUpDown, Filter,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type CatalystType = 'CERAMIC' | 'DPF' | 'CERAMIC_DPF' | 'FOIL' | 'SET' | 'STEEL' | 'OTHER';
+
+interface Valuation {
+  perGram?: { usd: number; inr: number };
+  perKg?: { usd: number; inr: number };
+  perPiece?: { usd: number; inr: number; weightGrams: number } | null;
+}
 
 interface CatalystSearchResult {
   id: number;
@@ -28,6 +34,7 @@ interface CatalystSearchResult {
   pdPpm: number | null;
   rhPpm: number | null;
   weightPerPieceGrams: number | null;
+  valuation?: Valuation | null;
 }
 
 interface SpringPage {
@@ -50,6 +57,7 @@ interface FormState {
   pdPpm: string;
   rhPpm: string;
   weightPerPieceGrams: string;
+  terms: string;
 }
 
 // ── Display helpers ────────────────────────────────────────────────────────
@@ -74,7 +82,7 @@ const CATALYST_TYPES: CatalystType[] = ['CERAMIC','DPF','CERAMIC_DPF','FOIL','SE
 const EMPTY_FORM: FormState = {
   manufacturer: '', manufacturerBrand: '', region: '',
   primaryCode: '', secondaryCode: '', secondaryCode2: '', catalystType: 'OTHER',
-  ptPpm: '', pdPpm: '', rhPpm: '', weightPerPieceGrams: '',
+  ptPpm: '', pdPpm: '', rhPpm: '', weightPerPieceGrams: '', terms: '70',
 };
 
 function formFrom(e: CatalystSearchResult): FormState {
@@ -90,6 +98,7 @@ function formFrom(e: CatalystSearchResult): FormState {
     pdPpm:               e.pdPpm != null ? String(e.pdPpm) : '',
     rhPpm:               e.rhPpm != null ? String(e.rhPpm) : '',
     weightPerPieceGrams: e.weightPerPieceGrams != null ? String(e.weightPerPieceGrams) : '',
+    terms:               e.terms != null ? String(e.terms) : '70',
   };
 }
 
@@ -122,6 +131,7 @@ function ManufacturerCombobox({ value, onChange }: {
   value: string;
   onChange: (mfr: string, brand: string) => void;
 }) {
+  const { authFetch } = useAuth();
   const [open, setOpen]           = useState(false);
   const [query, setQuery]         = useState(value);
   const [options, setOptions]     = useState<string[]>([]);
@@ -135,7 +145,7 @@ function ManufacturerCombobox({ value, onChange }: {
   useEffect(() => {
     if (!open || options.length > 0) return;
     setLoading(true);
-    fetch('/api/v1/catalog/manufacturers')
+    authFetch('/api/v1/catalog/manufacturers')
       .then(r => r.json())
       .then(b => setOptions(b.data ?? []))
       .catch(() => {})
@@ -257,7 +267,7 @@ function EntryModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <form onSubmit={handleSubmit} className="relative bg-surface-container-lowest border border-outline-variant w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+      <form onSubmit={handleSubmit} className="relative bg-surface-container-lowest border border-outline-variant w-full max-w-[calc(100vw-24px)] md:max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant sticky top-0 bg-surface-container-lowest z-10">
           <h2 className="text-headline-sm font-headline-sm text-on-surface">
             {mode === 'add' ? 'Add Catalog Entry' : 'Edit Catalog Entry'}
@@ -276,7 +286,7 @@ function EntryModal({
 
           <div>
             <p className={labelCls + ' border-b border-outline-variant pb-1 mb-3'}>CATALOG CODES</p>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className={labelCls}>Primary Code *</label>
                 <input ref={firstInputRef} className={inputCls} value={form.primaryCode} onChange={set('primaryCode')} placeholder="e.g. G654" />
@@ -294,7 +304,7 @@ function EntryModal({
 
           <div>
             <p className={labelCls + ' border-b border-outline-variant pb-1 mb-3'}>MANUFACTURER</p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={labelCls}>Manufacturer *</label>
                 <ManufacturerCombobox value={form.manufacturer} onChange={onManufacturerChange} />
@@ -321,7 +331,7 @@ function EntryModal({
 
           <div>
             <p className={labelCls + ' border-b border-outline-variant pb-1 mb-3'}>PGM CONTENT (PPM)</p>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {([['ptPpm','Platinum (Pt)'],['pdPpm','Palladium (Pd)'],['rhPpm','Rhodium (Rh)']] as const).map(([key, lbl]) => (
                 <div key={key}>
                   <label className={labelCls}>{lbl}</label>
@@ -333,9 +343,15 @@ function EntryModal({
 
           <div>
             <p className={labelCls + ' border-b border-outline-variant pb-1 mb-3'}>PHYSICAL</p>
-            <div className="w-1/2 pr-2">
-              <label className={labelCls}>Weight per Piece (grams)</label>
-              <input type="number" min="0" className={inputCls} value={form.weightPerPieceGrams} onChange={set('weightPerPieceGrams')} placeholder="e.g. 850" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Weight per Piece (grams)</label>
+                <input type="number" min="0" className={inputCls} value={form.weightPerPieceGrams} onChange={set('weightPerPieceGrams')} placeholder="e.g. 850" />
+              </div>
+              <div>
+                <label className={labelCls}>Terms (%)</label>
+                <input type="number" min="0" max="100" className={inputCls} value={form.terms} onChange={set('terms')} placeholder="e.g. 70" />
+              </div>
             </div>
           </div>
         </div>
@@ -403,6 +419,7 @@ function CatalogInner() {
   const initialQ = searchParams.get('q') ?? '';
   const { user, authFetch } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
+  const canViewPgm = user?.role === 'ADMIN' || user?.role === 'OWNER';
 
   // Search / table state
   const [inputValue, setInputValue]         = useState(initialQ);
@@ -416,6 +433,13 @@ function CatalogInner() {
   const [page, setPage]                     = useState(0);
   const [tableLoading, setTableLoading]     = useState(true);
   const [refreshKey, setRefreshKey]         = useState(0);
+
+  // Manufacturer filter
+  const [manufacturers, setManufacturers]   = useState<string[]>([]);
+  const [mfrFilter, setMfrFilter]           = useState<string>('');
+  const [mfrOpen, setMfrOpen]               = useState(false);
+  const [mfrSearch, setMfrSearch]           = useState('');
+  const mfrRef                              = useRef<HTMLDivElement>(null);
 
   // Admin CRUD state
   const [modal, setModal]           = useState<'add' | 'edit' | null>(null);
@@ -437,6 +461,23 @@ function CatalogInner() {
     toastTimer.current = setTimeout(() => setToast(null), 3000);
   };
 
+  // ── Load manufacturers for filter ──────────────────────────────────────────
+  useEffect(() => {
+    authFetch('/api/v1/catalog/manufacturers')
+      .then(r => r.json())
+      .then(b => setManufacturers(b.data ?? []))
+      .catch(() => {});
+  }, [authFetch]);
+
+  // Close manufacturer dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (!mfrRef.current?.contains(e.target as Node)) setMfrOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   // ── Debounce input ────────────────────────────────────────────────────────
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(inputValue.trim()), 300);
@@ -448,11 +489,12 @@ function CatalogInner() {
     if (!debouncedQuery) { setSuggestions([]); return; }
     setSuggestLoading(true);
     const p = new URLSearchParams({ q: debouncedQuery, size: '6', page: '0' });
-    if (typeFilter) p.set('type', typeFilter);
-    fetch(`/api/v1/catalog/search?${p}`)
+    if (typeFilter)  p.set('type', typeFilter);
+    if (mfrFilter)   p.set('manufacturer', mfrFilter);
+    authFetch(`/api/v1/catalog/search?${p}`)
       .then(r => r.json()).then(j => setSuggestions(j.data?.content ?? []))
       .catch(() => setSuggestions([])).finally(() => setSuggestLoading(false));
-  }, [debouncedQuery, typeFilter]);
+  }, [debouncedQuery, typeFilter, mfrFilter]);
 
   // ── Table results ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -460,7 +502,8 @@ function CatalogInner() {
     const p = new URLSearchParams({ size: '20', page: String(page) });
     if (debouncedQuery) p.set('q', debouncedQuery);
     if (typeFilter)     p.set('type', typeFilter);
-    fetch(`/api/v1/catalog/search?${p}`)
+    if (mfrFilter)      p.set('manufacturer', mfrFilter);
+    authFetch(`/api/v1/catalog/search?${p}`)
       .then(r => r.json()).then(j => {
         const data: SpringPage = j.data;
         setResults(data?.content ?? []);
@@ -469,9 +512,9 @@ function CatalogInner() {
       })
       .catch(() => { setResults([]); setTotalElements(0); })
       .finally(() => setTableLoading(false));
-  }, [debouncedQuery, typeFilter, page, refreshKey]);
+  }, [debouncedQuery, typeFilter, mfrFilter, page, refreshKey]);
 
-  useEffect(() => { setPage(0); }, [debouncedQuery, typeFilter]);
+  useEffect(() => { setPage(0); }, [debouncedQuery, typeFilter, mfrFilter]);
 
   // ── Outside click closes dropdown ─────────────────────────────────────────
   useEffect(() => {
@@ -514,6 +557,7 @@ function CatalogInner() {
         pdPpm:               form.pdPpm   ? parseFloat(form.pdPpm)   : null,
         rhPpm:               form.rhPpm   ? parseFloat(form.rhPpm)   : null,
         weightPerPieceGrams: form.weightPerPieceGrams ? parseFloat(form.weightPerPieceGrams) : null,
+        terms:               form.terms ? parseFloat(form.terms) : 70,
       };
       const url    = modal === 'add' ? '/api/v1/catalog' : `/api/v1/catalog/${editTarget!.id}`;
       const method = modal === 'add' ? 'POST' : 'PUT';
@@ -538,8 +582,6 @@ function CatalogInner() {
     setDeleteTarget(null);
     setDeleting(false);
   };
-
-  const colCount = isAdmin ? 10 : 9;
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -571,30 +613,31 @@ function CatalogInner() {
                 {typeFilter ? `${TYPE_LABELS[typeFilter]} Converters` : 'Converter Catalog'}
               </h1>
               <p className="text-body-md text-secondary mt-1">
-                {tableLoading ? 'Loading catalog…' : `${totalElements.toLocaleString()} entries${debouncedQuery ? ` for "${debouncedQuery}"` : ''}`}
+                {tableLoading ? 'Loading catalog…' : `${totalElements.toLocaleString()} entries${debouncedQuery ? ` for "${debouncedQuery}"` : ''}${mfrFilter ? ` · ${mfrFilter}` : ''}`}
               </p>
             </div>
           </div>
 
-          {/* Search bar */}
-          <div className="relative mt-4 max-w-2xl" ref={dropRef}>
-            <div className="flex items-center bg-surface-container-lowest border border-outline-variant focus-within:border-primary transition-colors">
-              <Search size={16} className="ml-4 text-outline shrink-0" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={inputValue}
-                onChange={e => { setInputValue(e.target.value); setShowDropdown(true); }}
-                onFocus={() => { if (inputValue) setShowDropdown(true); }}
-                onKeyDown={e => { if (e.key === 'Escape') setShowDropdown(false); }}
-                placeholder="Search by code — e.g. 8509241, G654, KSN70…"
-                className="flex-1 px-3 py-3 bg-transparent border-0 focus:ring-0 focus:outline-none text-body-md font-mono placeholder:font-sans placeholder:text-outline"
-              />
-              {suggestLoading && <Loader2 size={14} className="mr-3 text-outline animate-spin shrink-0" />}
-              {inputValue && !suggestLoading && (
-                <button onClick={clearSearch} className="mr-3 text-outline hover:text-primary transition-colors shrink-0"><X size={14} /></button>
-              )}
-            </div>
+          {/* Search bar + manufacturer filter */}
+          <div className="mt-4 max-w-2xl flex gap-2 items-start">
+            <div className="relative flex-1" ref={dropRef}>
+              <div className="flex items-center bg-surface-container-lowest border border-outline-variant focus-within:border-primary transition-colors">
+                <Search size={16} className="ml-4 text-outline shrink-0" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={inputValue}
+                  onChange={e => { setInputValue(e.target.value); setShowDropdown(true); }}
+                  onFocus={() => { if (inputValue) setShowDropdown(true); }}
+                  onKeyDown={e => { if (e.key === 'Escape') setShowDropdown(false); }}
+                  placeholder="Search by code or manufacturer…"
+                  className="flex-1 px-3 py-3 bg-transparent border-0 focus:ring-0 focus:outline-none text-body-md font-mono placeholder:font-sans placeholder:text-outline"
+                />
+                {suggestLoading && <Loader2 size={14} className="mr-3 text-outline animate-spin shrink-0" />}
+                {inputValue && !suggestLoading && (
+                  <button onClick={clearSearch} className="mr-3 text-outline hover:text-primary transition-colors shrink-0"><X size={14} /></button>
+                )}
+              </div>
 
             <AnimatePresence>
               {showDropdown && suggestions.length > 0 && (
@@ -611,7 +654,7 @@ function CatalogInner() {
                         {s.secondaryCode && <span className="font-mono text-[11px] text-outline hidden sm:inline truncate">↳ {s.secondaryCode}</span>}
                       </div>
                       <div className="flex items-center gap-2 shrink-0 ml-3">
-                        <span className="text-[11px] text-outline hidden md:inline">{s.manufacturerBrand}{s.region ? ` · ${s.region}` : ''}</span>
+                        <span className="text-[11px] text-outline hidden md:inline">{s.manufacturer}{s.region && !s.manufacturer.includes('(') ? ` · ${s.region}` : ''}</span>
                         <ChevronRight size={12} className="text-outline group-hover:text-primary transition-colors" />
                       </div>
                     </Link>
@@ -624,6 +667,63 @@ function CatalogInner() {
                 </motion.div>
               )}
             </AnimatePresence>
+            </div>
+
+            {/* Manufacturer filter */}
+            <div className="relative" ref={mfrRef}>
+              <button
+                onClick={() => setMfrOpen(o => !o)}
+                className={`flex items-center gap-2 px-3 py-3 border transition-colors whitespace-nowrap text-[13px] ${
+                  mfrFilter
+                    ? 'bg-primary/10 border-primary text-primary font-semibold'
+                    : 'bg-surface-container-lowest border-outline-variant text-on-surface-variant hover:border-primary'
+                }`}
+              >
+                <Filter size={14} />
+                <span className="hidden sm:inline">{mfrFilter || 'Manufacturer'}</span>
+                {mfrFilter && (
+                  <span onClick={e => { e.stopPropagation(); setMfrFilter(''); setMfrOpen(false); }}
+                    className="ml-1 hover:text-error transition-colors"><X size={12} /></span>
+                )}
+                {!mfrFilter && <ChevronsUpDown size={12} className="text-outline" />}
+              </button>
+
+              {mfrOpen && (
+                <div className="absolute top-full right-0 z-50 bg-surface-container-lowest border border-outline-variant border-t-0 shadow-xl w-64 max-h-64 flex flex-col">
+                  <div className="p-2 border-b border-outline-variant">
+                    <input
+                      autoFocus
+                      value={mfrSearch}
+                      onChange={e => setMfrSearch(e.target.value)}
+                      placeholder="Filter manufacturers…"
+                      className="w-full px-2 py-1.5 text-[12px] bg-surface border border-outline-variant focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                  <div className="overflow-y-auto flex-1">
+                    <button
+                      onClick={() => { setMfrFilter(''); setMfrOpen(false); setMfrSearch(''); }}
+                      className={`w-full text-left px-3 py-2 text-[13px] hover:bg-surface-container transition-colors ${
+                        !mfrFilter ? 'text-primary font-semibold' : 'text-on-surface'
+                      }`}
+                    >
+                      All Manufacturers
+                    </button>
+                    {manufacturers
+                      .filter(m => !mfrSearch || m.toLowerCase().includes(mfrSearch.toLowerCase()))
+                      .map(m => (
+                        <button key={m}
+                          onClick={() => { setMfrFilter(m); setMfrOpen(false); setMfrSearch(''); }}
+                          className={`w-full text-left px-3 py-2 text-[13px] hover:bg-surface-container transition-colors ${
+                            m === mfrFilter ? 'bg-primary/10 text-primary font-semibold' : 'text-on-surface'
+                          }`}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -646,76 +746,97 @@ function CatalogInner() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-secondary-container">
-                  <tr>
-                    {[
-                      { label: '#',            cls: 'w-10' },
-                      { label: 'PRIMARY CODE', cls: '' },
-                      { label: 'TYPE',         cls: '' },
-                      { label: 'MANUFACTURER', cls: '' },
-                      { label: 'REGION',       cls: '' },
-                      { label: 'ALT CODE',     cls: '' },
-                      { label: 'Pt',           cls: 'text-center' },
-                      { label: 'Pd',           cls: 'text-center' },
-                      { label: 'Rh',           cls: 'text-center' },
-                      ...(isAdmin ? [{ label: '', cls: 'w-20' }] : []),
-                    ].map(({ label, cls }, i) => (
-                      <th key={label + i} className={`p-3 border-b border-outline-variant text-label-caps font-label-caps text-[10px] text-on-secondary-fixed-variant whitespace-nowrap ${cls}`}>
-                        {label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {tableLoading ? (
-                    Array.from({ length: 10 }).map((_, i) => <SkeletonRow key={i} cols={colCount} />)
-                  ) : results.length === 0 ? (
-                    <tr>
-                      <td colSpan={colCount} className="py-20 text-center text-on-surface-variant text-body-md">
-                        {debouncedQuery ? `No converters found for "${debouncedQuery}".` : 'No converters found.'}
-                      </td>
-                    </tr>
-                  ) : (
-                    results.map((row, idx) => (
-                      <motion.tr key={row.id}
-                        initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.2, delay: idx * 0.025 }}
-                        onClick={() => router.push(`/catalog/${row.id}`)}
-                        className={`border-b border-outline-variant hover:bg-surface-container transition-colors cursor-pointer ${idx % 2 === 1 ? 'bg-surface-container-low/30' : ''}`}>
-                        <td className="p-3 text-outline font-mono text-[12px]">{(page * 20 + idx + 1).toString().padStart(2, '0')}</td>
-                        <td className="p-3 font-mono text-[13px] font-bold text-primary whitespace-nowrap">{row.primaryCode}</td>
-                        <td className="p-3">
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 border whitespace-nowrap ${TYPE_COLORS[row.catalystType]}`}>
-                            {TYPE_LABELS[row.catalystType]}
-                          </span>
-                        </td>
-                        <td className="p-3 text-body-md whitespace-nowrap">{row.manufacturerBrand}</td>
-                        <td className="p-3 text-body-md text-on-surface-variant whitespace-nowrap">{row.region ?? '—'}</td>
-                        <td className="p-3 font-mono text-[12px] text-on-surface-variant whitespace-nowrap">{row.secondaryCode ?? '—'}</td>
-                        <td className="p-3"><PPMCell value={row.ptPpm} label="Pt" /></td>
-                        <td className="p-3"><PPMCell value={row.pdPpm} label="Pd" /></td>
-                        <td className="p-3"><PPMCell value={row.rhPpm} label="Rh" /></td>
-                        {isAdmin && (
-                          <td className="p-3 text-right" onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button onClick={() => openEdit(row)}
-                                className="p-1.5 border border-outline-variant text-outline hover:border-primary hover:text-primary transition-colors" title="Edit">
-                                <Pencil size={11} />
-                              </button>
-                              <button onClick={() => setDeleteTarget(row)}
-                                className="p-1.5 border border-outline-variant text-outline hover:border-error hover:text-error transition-colors" title="Delete">
-                                <Trash2 size={11} />
-                              </button>
-                            </div>
-                          </td>
+            {/* Product Cards */}
+            {tableLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="bg-surface-container border border-outline-variant p-4 animate-pulse">
+                    <div className="h-4 bg-outline-variant/30 rounded w-2/3 mb-3" />
+                    <div className="h-3 bg-outline-variant/30 rounded w-1/2 mb-2" />
+                    <div className="h-3 bg-outline-variant/30 rounded w-1/3" />
+                  </div>
+                ))}
+              </div>
+            ) : results.length === 0 ? (
+              <div className="py-20 text-center text-on-surface-variant text-body-md">
+                {debouncedQuery ? `No converters found for "${debouncedQuery}".` : 'No converters found.'}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+                {results.map((row, idx) => (
+                  <motion.div
+                    key={row.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2, delay: idx * 0.03 }}
+                    onClick={() => router.push(`/catalog/${row.id}`)}
+                    className="bg-surface-container-lowest border border-outline-variant hover:border-primary transition-colors cursor-pointer group"
+                  >
+                    {/* Card Header */}
+                    <div className="px-4 pt-4 pb-2 flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <span className="font-mono text-[15px] font-bold text-primary group-hover:underline block truncate" style={{ direction: 'rtl', textAlign: 'left' }} title={row.primaryCode}>{row.primaryCode}</span>
+                        {row.secondaryCode && (
+                          <span className="block font-mono text-[10px] text-outline mt-0.5 truncate" style={{ direction: 'rtl', textAlign: 'left' }} title={row.secondaryCode}>{row.secondaryCode}</span>
                         )}
-                      </motion.tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 border shrink-0 ${TYPE_COLORS[row.catalystType]}`}>
+                        {TYPE_LABELS[row.catalystType]}
+                      </span>
+                    </div>
+
+                    {/* Manufacturer + Region */}
+                    <div className="px-4 pb-3">
+                      <span className="text-[12px] text-on-surface-variant">{row.manufacturerBrand || row.manufacturer}</span>
+                      {row.region && <span className="text-[10px] text-outline ml-2">{row.region}</span>}
+                    </div>
+
+                    {/* PGM Data — admin/owner only */}
+                    {canViewPgm && (row.ptPpm != null || row.pdPpm != null || row.rhPpm != null) && (
+                      <div className="px-4 pb-3 flex gap-3">
+                        <PPMCell value={row.ptPpm} label="Pt" />
+                        <PPMCell value={row.pdPpm} label="Pd" />
+                        <PPMCell value={row.rhPpm} label="Rh" />
+                        {row.weightPerPieceGrams != null && (
+                          <div className="text-center min-w-[36px]">
+                            <div className="text-[9px] text-outline mb-0.5 font-bold">WT</div>
+                            <div className="font-mono text-[12px] font-bold">{row.weightPerPieceGrams.toFixed(0)}g</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Price footer */}
+                    <div className="px-4 py-3 border-t border-outline-variant bg-surface-container/30 flex items-center justify-between">
+                      <div>
+                        {row.valuation?.perKg?.inr ? (
+                          <>
+                            <span className="font-mono text-[14px] font-bold">
+                              ₹{row.valuation.perKg.inr.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-[9px] text-outline ml-1">/kg</span>
+                          </>
+                        ) : (
+                          <span className="text-[11px] text-outline">Price unavailable</span>
+                        )}
+                      </div>
+                      {isAdmin && (
+                        <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                          <button onClick={() => openEdit(row)}
+                            className="p-1.5 border border-outline-variant text-outline hover:border-primary hover:text-primary transition-colors" title="Edit">
+                            <Pencil size={11} />
+                          </button>
+                          <button onClick={() => setDeleteTarget(row)}
+                            className="p-1.5 border border-outline-variant text-outline hover:border-error hover:text-error transition-colors" title="Delete">
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
 
             {/* Pagination */}
             {totalPages > 1 && (

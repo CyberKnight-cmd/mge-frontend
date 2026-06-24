@@ -2,24 +2,34 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { Menu, X, LogOut, LayoutDashboard } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Menu, X, LogOut, LayoutDashboard, ShoppingCart, User as UserIcon } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import CatalogSearchBox from '@/components/search/CatalogSearchBox';
 
 const navLinks = [
   { href: '/',               label: 'Home'           },
   { href: '/catalog',        label: 'Products'       },
+  { href: '/marketplace',    label: 'Marketplace'    },
   { href: '/metals-pricing', label: 'Metals Pricing' },
   { href: '/about',          label: 'About Us'       },
-  { href: '/reviews',        label: 'Reviews'        },
 ];
 
 export default function Navbar() {
   const pathname    = usePathname();
   const router      = useRouter();
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, authFetch } = useAuth();
+  const canViewDashboard = user?.role === 'ADMIN' || user?.role === 'OWNER';
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
+
+  useEffect(() => {
+    if (!isAuthenticated) { setCartCount(0); return; }
+    authFetch('/api/v1/cart/count')
+      .then(r => r.ok ? r.json() : null)
+      .then(body => { if (body?.data?.count != null) setCartCount(body.data.count); })
+      .catch(() => {});
+  }, [isAuthenticated, authFetch]);
 
   const handleLogout = () => {
     logout();
@@ -35,9 +45,10 @@ export default function Navbar() {
       <div className="max-w-container mx-auto px-margin-mobile md:px-margin-desktop h-16 flex items-center justify-between">
 
         {/* Logo + Desktop Links */}
-        <div className="flex items-center gap-8">
+        <div className="flex items-center gap-4 md:gap-8">
           <Link href="/" className="text-headline-sm font-bold text-primary tracking-tight whitespace-nowrap">
-            Mayank Global Exports
+            <span className="hidden sm:inline">Mayank Global Exports</span>
+            <span className="sm:hidden">MGE</span>
           </Link>
           <div className="hidden md:flex items-center gap-6">
             {navLinks.map(({ href, label }) => {
@@ -65,18 +76,32 @@ export default function Navbar() {
 
           {isAuthenticated && user ? (
             <>
+              {canViewDashboard && (
+                <Link
+                  href="/dashboard"
+                  className="flex items-center gap-1.5 text-label-caps font-label-caps text-secondary hover:text-primary transition-colors px-3 py-2"
+                >
+                  <LayoutDashboard size={14} />
+                  Dashboard
+                </Link>
+              )}
               <Link
-                href="/dashboard"
-                className="flex items-center gap-1.5 text-label-caps font-label-caps text-secondary hover:text-primary transition-colors px-3 py-2"
+                href="/cart"
+                className="relative flex items-center text-secondary hover:text-primary transition-colors px-2 py-2"
+                aria-label="Cart"
               >
-                <LayoutDashboard size={14} />
-                Dashboard
+                <ShoppingCart size={16} />
+                {cartCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 bg-error text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full">
+                    {cartCount > 9 ? '9+' : cartCount}
+                  </span>
+                )}
               </Link>
               <div className="flex items-center gap-2 bg-primary-container border border-outline-variant px-3 py-1.5">
                 <div className="w-7 h-7 bg-primary flex items-center justify-center text-on-primary font-bold text-[11px]">
-                  {initials}
+                  {initials || <UserIcon size={14} />}
                 </div>
-                <span className="text-[13px] font-semibold text-on-primary-container">{user.firstName}</span>
+                <span className="text-[13px] font-semibold text-on-primary-container">{user.firstName || user.email?.split('@')[0] || 'User'}</span>
               </div>
               <button
                 onClick={handleLogout}
@@ -134,8 +159,14 @@ export default function Navbar() {
           <hr className="border-outline-variant" />
           {isAuthenticated && user ? (
             <>
-              <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="text-label-caps font-label-caps text-secondary">
-                Dashboard ({user.firstName})
+              {canViewDashboard && (
+                <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="text-label-caps font-label-caps text-secondary">
+                  Dashboard ({user.firstName || user.email?.split('@')[0] || 'User'})
+                </Link>
+              )}
+              <Link href="/cart" onClick={() => setMobileOpen(false)} className="text-label-caps font-label-caps text-secondary flex items-center gap-2">
+                <ShoppingCart size={14} />
+                Cart{cartCount > 0 && ` (${cartCount})`}
               </Link>
               <button onClick={() => { setMobileOpen(false); handleLogout(); }} className="text-label-caps font-label-caps text-error text-left">
                 Sign Out

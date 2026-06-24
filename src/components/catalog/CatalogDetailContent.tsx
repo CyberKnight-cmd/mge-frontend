@@ -5,11 +5,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { motion, type Variants } from 'framer-motion';
 import {
-  ChevronRight, BarChart3, MapPin, ShieldCheck, Send,
+  ChevronRight, ChevronLeft, BarChart3, MapPin, ShieldCheck,
   TrendingUp, Zap, FileText, Globe, AlertCircle, ArrowLeft,
-  Calculator, DollarSign, Check, Pencil, Save,
+  Calculator, DollarSign, Check, Pencil, Save, X,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import ImageUploader from './ImageUploader';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,7 @@ interface CatalystDetail {
   pdPpm: number | null;
   rhPpm: number | null;
   weightPerPieceGrams: number | null;
+  terms: number | null;
   images: CatalystImage[];
 }
 
@@ -86,6 +88,10 @@ function fmtCurrency(value: number, currency: 'INR' | 'USD'): string {
 export default function CatalogDetailContent({ code }: { code: string }) {
   const { user, isAuthenticated, authFetch } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
+  const isOwner = user?.role === 'OWNER';
+  const canEdit = isAdmin || isOwner;
+  const canViewPgm = isAdmin || isOwner;
+  const canViewPricing = isAdmin || isOwner || user?.role === 'SELLER';
 
   // ── Server data ──────────────────────────────────────────────────────────
   const [entry, setEntry]       = useState<CatalystDetail | null>(null);
@@ -98,16 +104,19 @@ export default function CatalogDetailContent({ code }: { code: string }) {
   const [pdPpm,       setPdPpm]       = useState('');
   const [rhPpm,       setRhPpm]       = useState('');
   const [weightGrams, setWeightGrams] = useState('');
+  const [terms,       setTerms]       = useState('70');
 
   // ── Market data ──────────────────────────────────────────────────────────
   const [metalPrices, setMetalPrices] = useState<MetalPrices | null>(null);
   const [usdToInr,    setUsdToInr]    = useState<number | null>(null);
+  const [trendPoints, setTrendPoints] = useState<Array<{ label: string; ptPrice: number | null }>>([]);
 
   // ── UI state ─────────────────────────────────────────────────────────────
   // Default to USD; switches to INR once the forex rate arrives
   const [currency, setCurrency] = useState<'INR' | 'USD'>('USD');
   const [saving,   setSaving]   = useState(false);
   const [saveMsg,  setSaveMsg]  = useState<{ text: string; ok: boolean } | null>(null);
+
 
   // ── Admin inline edit for specs ─────────────────────────────────────────
   const [editing,     setEditing]     = useState(false);
@@ -123,7 +132,7 @@ export default function CatalogDetailContent({ code }: { code: string }) {
   useEffect(() => {
     setLoading(true);
     setError('');
-    fetch(`/api/v1/catalog/${code}`)
+    authFetch(`/api/v1/catalog/${code}`)
       .then(r => {
         if (!r.ok) throw new Error(r.status === 404 ? 'Catalog entry not found.' : 'Failed to load entry.');
         return r.json();
@@ -135,6 +144,7 @@ export default function CatalogDetailContent({ code }: { code: string }) {
         if (e.pdPpm  != null) setPdPpm(String(e.pdPpm));
         if (e.rhPpm  != null) setRhPpm(String(e.rhPpm));
         if (e.weightPerPieceGrams != null) setWeightGrams(String(e.weightPerPieceGrams));
+        if (e.terms != null) setTerms(String(e.terms));
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
@@ -142,7 +152,7 @@ export default function CatalogDetailContent({ code }: { code: string }) {
 
   // ── Fetch market prices once — independent fetches so one failure can't block the other
   useEffect(() => {
-    fetch('/api/v1/metals/prices')
+    authFetch('/api/v1/metals/prices')
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(body => {
         const prices: Array<{ symbol: string; priceUsd?: number }> =
@@ -156,17 +166,25 @@ export default function CatalogDetailContent({ code }: { code: string }) {
       })
       .catch(() => {});
 
-    fetch('/api/v1/forex/rates')
+    authFetch('/api/v1/forex/rates')
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(body => {
         const fx = body.data ?? body;
         if (fx.usdToInr) {
           setUsdToInr(fx.usdToInr);
-          setCurrency('INR'); // upgrade default to INR once rate is available
+          setCurrency('INR');
         }
       })
       .catch(() => {});
-  }, []);
+
+    authFetch('/api/v1/metals/history?period=1D')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(body => {
+        const points = (body.data ?? body).points;
+        if (Array.isArray(points)) setTrendPoints(points);
+      })
+      .catch(() => {});
+  }, [authFetch]);
 
   // ── Client-side valuation (no API round-trip per keystroke) ─────────────
   // Requires metal prices. INR values are 0 when the forex rate hasn't loaded yet.
@@ -177,13 +195,13 @@ export default function CatalogDetailContent({ code }: { code: string }) {
     const rh = parseFloat(rhPpm) || 0;
     if (pt === 0 && pd === 0 && rh === 0) return null;
 
-    const TERMS = 70;
+    const termsVal = parseFloat(terms) || 70;
     const GRAMS_PER_TROY_OZ = 31.1035;
 
     const totalUsdPerTon =
-      (pt / GRAMS_PER_TROY_OZ) * (TERMS / 100) * metalPrices.pt +
-      (pd / GRAMS_PER_TROY_OZ) * (TERMS / 100) * metalPrices.pd +
-      (rh / GRAMS_PER_TROY_OZ) * (TERMS / 100) * metalPrices.rh;
+      (pt / GRAMS_PER_TROY_OZ) * (termsVal / 100) * metalPrices.pt +
+      (pd / GRAMS_PER_TROY_OZ) * (termsVal / 100) * metalPrices.pd +
+      (rh / GRAMS_PER_TROY_OZ) * (termsVal / 100) * metalPrices.rh;
 
     const usdPerKg   = totalUsdPerTon / 1000;
     const usdPerGram = usdPerKg / 1000;
@@ -201,7 +219,7 @@ export default function CatalogDetailContent({ code }: { code: string }) {
         inr: round2(w * inrPerGram),
       } : null,
     };
-  }, [ptPpm, pdPpm, rhPpm, weightGrams, metalPrices, usdToInr]);
+  }, [ptPpm, pdPpm, rhPpm, weightGrams, terms, metalPrices, usdToInr, entry]);
 
   // ── Save to catalog ───────────────────────────────────────────────────────
   async function handleSave() {
@@ -217,6 +235,7 @@ export default function CatalogDetailContent({ code }: { code: string }) {
           pdPpm:               pdPpm       ? parseFloat(pdPpm)       : null,
           rhPpm:               rhPpm       ? parseFloat(rhPpm)       : null,
           weightPerPieceGrams: weightGrams ? parseFloat(weightGrams) : null,
+          terms:               terms       ? parseFloat(terms)       : null,
         }),
       });
       if (!res.ok) throw new Error();
@@ -272,6 +291,7 @@ export default function CatalogDetailContent({ code }: { code: string }) {
           pdPpm:               pdPpm  ? parseFloat(pdPpm)  : null,
           rhPpm:               rhPpm  ? parseFloat(rhPpm)  : null,
           weightPerPieceGrams: weightGrams ? parseFloat(weightGrams) : null,
+          terms:               terms ? parseFloat(terms) : null,
         }),
       });
       if (!res.ok) {
@@ -288,6 +308,23 @@ export default function CatalogDetailContent({ code }: { code: string }) {
     }
   }
 
+  // ── Image upload/delete handlers ─────────────────────────────────────────
+  const handleImageUploaded = useCallback((newImage: CatalystImage) => {
+    setEntry(prev => prev ? { ...prev, images: [...prev.images, newImage] } : prev);
+  }, []);
+
+  const handleImageDeleted = useCallback(async (imageId: number) => {
+    if (!entry) return;
+    try {
+      const res = await authFetch(`/api/v1/catalog/${entry.id}/images/${imageId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setEntry(prev => prev ? { ...prev, images: prev.images.filter(img => img.id !== imageId) } : prev);
+        setActiveImg(0);
+      }
+    } catch {}
+  }, [entry, authFetch]);
+
+  // ── Quote submit ──────────────────────────────────────────────────────────
   // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -401,52 +438,78 @@ export default function CatalogDetailContent({ code }: { code: string }) {
             animate="visible"
           >
             {/* Image gallery */}
-            <motion.div className="grid grid-cols-4 gap-3" variants={fadeUp}>
-              <div className="col-span-4 aspect-video bg-primary-container border border-outline-variant relative overflow-hidden group flex items-center justify-center">
-                <div className="absolute inset-0 opacity-10"
-                  style={{ backgroundImage: 'radial-gradient(circle, #bac8dc 1px, transparent 1px)', backgroundSize: '24px 24px' }}
-                />
+            <motion.div className="flex flex-col md:flex-row gap-3" variants={fadeUp}>
+              {/* Main image */}
+              <div className="flex-1 aspect-[4/5] max-h-[420px] bg-black border border-outline-variant relative overflow-hidden group flex items-center justify-center">
                 {currentImage ? (
-                  <Image src={currentImage.imageUrl} alt={entry.primaryCode} fill className="object-cover" unoptimized />
+                  <Image src={currentImage.imageUrl} alt={entry.primaryCode} fill className="object-contain" unoptimized />
                 ) : (
-                  <BarChart3 size={64} className="text-on-primary-container/30 group-hover:scale-110 transition-transform duration-500" />
+                  <>
+                    <div className="absolute inset-0 opacity-10"
+                      style={{ backgroundImage: 'radial-gradient(circle, #bac8dc 1px, transparent 1px)', backgroundSize: '24px 24px' }}
+                    />
+                    <BarChart3 size={64} className="text-on-primary-container/30 group-hover:scale-110 transition-transform duration-500" />
+                  </>
+                )}
+                {images.length > 1 && (
+                  <>
+                    <button
+                      onClick={() => setActiveImg(i => (i - 1 + images.length) % images.length)}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-1.5 transition-opacity opacity-0 group-hover:opacity-100"
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+                    <button
+                      onClick={() => setActiveImg(i => (i + 1) % images.length)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-1.5 transition-opacity opacity-0 group-hover:opacity-100"
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                  </>
                 )}
                 <div className="absolute top-3 left-3 bg-black/60 text-on-primary px-2 py-1 text-label-caps font-label-caps text-[10px] flex items-center gap-1">
                   <Zap size={10} /> {images.length > 0 ? 'CATALOG IMAGE' : 'NO IMAGE YET'}
                 </div>
               </div>
 
-              {images.slice(0, 3).map((img, i) => (
-                <motion.div
-                  key={img.id}
-                  onClick={() => setActiveImg(i)}
-                  whileHover={{ scale: 1.04, borderColor: '#000' }}
-                  className={`aspect-square border cursor-pointer transition-colors relative overflow-hidden flex items-center justify-center ${activeImg === i ? 'border-primary' : 'border-outline-variant bg-surface-container'}`}
-                >
-                  <Image src={img.imageUrl} alt={`View ${i + 1}`} fill className="object-cover" unoptimized />
-                </motion.div>
-              ))}
+              {/* Thumbnails: row on mobile, column on desktop */}
+              <div className="flex flex-row md:flex-col gap-3 md:w-20">
+                {images.slice(0, 3).map((img, i) => (
+                  <motion.div
+                    key={img.id}
+                    onClick={() => setActiveImg(i)}
+                    whileHover={{ scale: 1.04, borderColor: '#000' }}
+                    className={`aspect-square w-full border cursor-pointer transition-colors relative overflow-hidden flex items-center justify-center group/thumb ${activeImg === i ? 'border-primary' : 'border-outline-variant bg-surface-container'}`}
+                  >
+                    <Image src={img.imageUrl} alt={`View ${i + 1}`} fill className="object-cover" unoptimized />
+                    {isAuthenticated && (
+                      <button
+                        onClick={e => { e.stopPropagation(); handleImageDeleted(img.id); }}
+                        className="absolute top-1 right-1 bg-black/60 text-white p-0.5 opacity-0 group-hover/thumb:opacity-100 transition-opacity hover:bg-error"
+                        title="Delete image"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </motion.div>
+                ))}
 
-              {Array.from({ length: Math.max(0, 3 - images.length) }).map((_, i) => (
-                <div key={`ph-${i}`} className="aspect-square bg-surface-container border border-outline-variant flex items-center justify-center">
-                  <BarChart3 size={20} className="text-on-surface-variant/20" />
-                </div>
-              ))}
+                <ImageUploader
+                  entryId={entry.id}
+                  currentImageCount={images.length}
+                  onUploadComplete={handleImageUploaded}
+                />
 
-              {images.length > 3 && (
-                <motion.div
-                  whileHover={{ scale: 1.04 }}
-                  onClick={() => setActiveImg(3)}
-                  className="aspect-square bg-surface-container-highest border border-outline-variant flex items-center justify-center cursor-pointer hover:border-secondary transition-colors"
-                >
-                  <span className="text-label-caps font-label-caps text-on-surface-variant text-center text-[10px]">
-                    +{images.length - 3} More
-                  </span>
-                </motion.div>
-              )}
+                {Array.from({ length: Math.max(0, 3 - images.length - 1) }).map((_, i) => (
+                  <div key={`ph-${i}`} className="aspect-square w-full bg-surface-container border border-outline-variant flex items-center justify-center">
+                    <BarChart3 size={20} className="text-on-surface-variant/20" />
+                  </div>
+                ))}
+              </div>
             </motion.div>
 
-            {/* PGM Analysis + input section */}
+            {/* PGM Analysis + input section — admin/owner only */}
+            {canViewPgm && (
             <motion.div className="bg-surface-container-lowest border border-outline-variant accent-left" variants={fadeLeft}>
               {/* Display cards */}
               <div className="p-6 pb-4">
@@ -462,7 +525,7 @@ export default function CatalogDetailContent({ code }: { code: string }) {
                 </div>
 
                 <motion.div
-                  className="grid grid-cols-3 gap-4"
+                  className="grid grid-cols-1 sm:grid-cols-3 gap-4"
                   variants={{ visible: { transition: { staggerChildren: 0.12 } } }}
                 >
                   {pgmRows.map(({ element, ppm, color }) => (
@@ -490,19 +553,17 @@ export default function CatalogDetailContent({ code }: { code: string }) {
                 </motion.div>
               </div>
 
-              {/* Input section */}
+              {/* Input section — admin/owner only */}
+              {canEdit && (
               <div className="border-t border-outline-variant px-6 py-5">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <Pencil size={13} className="text-secondary" />
                     <span className="text-label-caps font-label-caps">UPDATE ANALYSIS DATA</span>
                   </div>
-                  {!isAuthenticated && (
-                    <span className="text-[10px] text-outline font-label-caps">LOG IN TO SAVE</span>
-                  )}
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                   {pgmRows.map(({ element, raw, setter }) => {
                     const short = element.split(' ')[0].toUpperCase();
                     return (
@@ -523,21 +584,37 @@ export default function CatalogDetailContent({ code }: { code: string }) {
                   })}
                 </div>
 
-                <div className="mb-5">
-                  <label className="block text-[10px] text-label-caps font-label-caps text-on-surface-variant mb-1.5">
-                    WEIGHT PER PIECE (grams)
-                  </label>
-                  <input
-                    type="number"
-                    value={weightGrams}
-                    onChange={e => setWeightGrams(e.target.value)}
-                    placeholder="e.g. 1200"
-                    min={0}
-                    className="w-full bg-surface-container border border-outline-variant text-on-surface px-3 py-2 font-mono text-sm focus:border-primary focus:outline-none transition-colors"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+                  <div>
+                    <label className="block text-[10px] text-label-caps font-label-caps text-on-surface-variant mb-1.5">
+                      WEIGHT PER PIECE (grams)
+                    </label>
+                    <input
+                      type="number"
+                      value={weightGrams}
+                      onChange={e => setWeightGrams(e.target.value)}
+                      placeholder="e.g. 1200"
+                      min={0}
+                      className="w-full bg-surface-container border border-outline-variant text-on-surface px-3 py-2 font-mono text-sm focus:border-primary focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-label-caps font-label-caps text-on-surface-variant mb-1.5">
+                      TERMS (%)
+                    </label>
+                    <input
+                      type="number"
+                      value={terms}
+                      onChange={e => setTerms(e.target.value)}
+                      placeholder="e.g. 70"
+                      min={0}
+                      max={100}
+                      className="w-full bg-surface-container border border-outline-variant text-on-surface px-3 py-2 font-mono text-sm focus:border-primary focus:outline-none transition-colors"
+                    />
+                  </div>
                 </div>
 
-                {isAuthenticated ? (
+                {canEdit ? (
                   <div className="flex items-center gap-3">
                     <motion.button
                       onClick={handleSave}
@@ -560,14 +637,11 @@ export default function CatalogDetailContent({ code }: { code: string }) {
                       </motion.span>
                     )}
                   </div>
-                ) : (
-                  <p className="text-[11px] text-on-surface-variant">
-                    <Link href="/auth/login" className="text-primary hover:underline">Log in</Link>
-                    {' '}to save values to the catalog permanently.
-                  </p>
-                )}
+                ) : null}
               </div>
+              )}
             </motion.div>
+            )}
 
             {/* Specs table */}
             <motion.div className="bg-surface-container-lowest border border-outline-variant" variants={fadeUp}>
@@ -576,7 +650,7 @@ export default function CatalogDetailContent({ code }: { code: string }) {
                   <FileText size={14} className="text-secondary" />
                   <h2 className="text-label-caps font-label-caps">FULL CATALOG SPECIFICATIONS</h2>
                 </div>
-                {isAdmin && !editing && (
+                {canEdit && !editing && (
                   <button onClick={startEdit} className="flex items-center gap-1.5 text-label-caps font-label-caps text-[10px] text-primary hover:text-on-surface transition-colors">
                     <Pencil size={12} /> EDIT
                   </button>
@@ -662,7 +736,7 @@ export default function CatalogDetailContent({ code }: { code: string }) {
                         </td>
                       </motion.tr>
                     ))}
-                    {pgmRows.map(({ element, ppm }) => (
+                    {canViewPgm && pgmRows.map(({ element, ppm }) => (
                       <motion.tr
                         key={element}
                         variants={rowAnim}
@@ -674,12 +748,14 @@ export default function CatalogDetailContent({ code }: { code: string }) {
                         </td>
                       </motion.tr>
                     ))}
+                    {canViewPgm && (
                     <motion.tr variants={rowAnim} className="hover:bg-surface-container-low/50 transition-colors">
                       <td className="px-6 py-3 bg-surface-container-low text-label-caps font-label-caps w-1/3">WEIGHT / PIECE</td>
                       <td className="px-6 py-3 font-mono text-[13px] text-secondary">
                         {parseFloat(weightGrams) > 0 ? `${parseFloat(weightGrams).toLocaleString()} g` : '—'}
                       </td>
                     </motion.tr>
+                    )}
                   </motion.tbody>
                 </motion.table>
               )}
@@ -693,7 +769,8 @@ export default function CatalogDetailContent({ code }: { code: string }) {
             initial="hidden"
             animate="visible"
           >
-            {/* Live Valuation card */}
+            {/* Live Valuation card — admin/owner/seller only */}
+            {canViewPricing && (
             <motion.div className="bg-surface-container-lowest border border-outline-variant accent-left" variants={fadeRight}>
               <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between">
                 <h3 className="text-label-caps font-label-caps flex items-center gap-2">
@@ -768,55 +845,36 @@ export default function CatalogDetailContent({ code }: { code: string }) {
                         Pt ${metalPrices.pt.toLocaleString()} · Pd ${metalPrices.pd.toLocaleString()} · Rh ${metalPrices.rh.toLocaleString()} /troy oz
                       </div>
                       <div className="text-[10px] text-outline">
-                        $1 = ₹{usdToInr?.toLocaleString('en-IN')} · Terms 70% · LBMA spot
+                        $1 = ₹{usdToInr?.toLocaleString('en-IN')} · Terms {entry?.terms ?? 70}% · LBMA spot
                       </div>
                     </div>
                   </>
                 )}
               </div>
             </motion.div>
+            )}
 
-            {/* Quote form */}
+            {/* Buy / Sell Bid Buttons */}
             <motion.div className="bg-primary-container text-on-primary p-6" variants={fadeRight}>
-              <h3 className="text-headline-sm font-headline-sm text-primary-fixed-dim mb-5">Request a Quote</h3>
-              <form className="flex flex-col gap-4" onSubmit={(e) => e.preventDefault()}>
-                {[
-                  { label: 'FULL NAME',    type: 'text' },
-                  { label: 'COMPANY NAME', type: 'text' },
-                  { label: 'EMAIL',        type: 'email' },
-                ].map(({ label, type }) => (
-                  <div key={label}>
-                    <label className="block text-label-caps font-label-caps text-on-primary-fixed-variant mb-1.5">{label}</label>
-                    <input
-                      type={type}
-                      className="w-full bg-tertiary-container border border-outline text-on-primary px-4 py-3 focus:border-primary-fixed-dim focus:ring-0 focus:outline-none"
-                    />
-                  </div>
-                ))}
-                <div>
-                  <label className="block text-label-caps font-label-caps text-on-primary-fixed-variant mb-1.5">QUANTITY (UNITS)</label>
-                  <input
-                    type="number"
-                    defaultValue={1}
-                    min={1}
-                    className="w-full bg-tertiary-container border border-outline text-on-primary px-4 py-3 focus:border-primary-fixed-dim focus:ring-0 focus:outline-none font-mono"
-                  />
-                </div>
-                <motion.button
-                  type="submit"
-                  whileHover={{ opacity: 0.85 }}
-                  whileTap={{ scale: 0.99 }}
-                  className="bg-on-primary text-primary text-label-caps font-label-caps py-4 mt-2 transition-opacity flex items-center justify-center gap-2"
+              <h3 className="text-headline-sm font-headline-sm text-primary-fixed-dim mb-3">Interested?</h3>
+              <p className="text-body-sm text-on-primary-container mb-5">Post a bid to buy or sell this entry on the marketplace.</p>
+              <div className="flex flex-col gap-3">
+                <Link
+                  href={`/marketplace?entryId=${entry.id}&type=BUY`}
+                  className="w-full bg-on-primary text-primary text-label-caps font-label-caps py-4 flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
                 >
-                  <Send size={14} /> SEND INQUIRY
-                </motion.button>
-                <p className="text-[10px] text-on-primary-container text-center">
-                  Inquiries processed within 2 business hours.
-                </p>
-              </form>
+                  <TrendingUp size={15} /> I WANT TO BUY
+                </Link>
+                <Link
+                  href={`/marketplace?entryId=${entry.id}&type=SELL`}
+                  className="w-full border-2 border-on-primary-container text-on-primary text-label-caps font-label-caps py-4 flex items-center justify-center gap-2 hover:bg-on-primary/10 transition-colors"
+                >
+                  <TrendingUp size={15} className="rotate-180" /> I WANT TO SELL
+                </Link>
+              </div>
             </motion.div>
 
-            {/* Available sellers */}
+            {/* Available sellers — COMING SOON */}
             <motion.div className="bg-surface-container-lowest border border-outline-variant" variants={fadeRight}>
               <div className="px-5 py-4 border-b border-outline-variant flex justify-between items-center">
                 <h3 className="text-label-caps font-label-caps flex items-center gap-2">
@@ -847,28 +905,47 @@ export default function CatalogDetailContent({ code }: { code: string }) {
             >
               <h4 className="text-label-caps font-label-caps mb-1 flex items-center gap-2">
                 <TrendingUp size={13} className="text-primary" />
-                PGM MARKET TREND (24H)
+                PLATINUM SPOT (24H)
               </h4>
               <p className="text-[10px] text-outline mb-3">
                 {metalPrices
                   ? `Last updated: ${metalPrices.fetchedAt}`
-                  : 'Indicative — fetched 3× daily at 03:00, 11:00, 19:00 IST'}
+                  : 'Fetched 3× daily at 03:00, 11:00, 19:00 IST'}
               </p>
-              <div className="h-20 w-full flex items-end gap-1 px-1">
-                {[40, 45, 42, 55, 60, 58, 75, 82, 70, 78, 85, 80].map((h, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ height: 0 }}
-                    animate={{ height: `${h}%` }}
-                    transition={{ delay: 0.6 + i * 0.04, duration: 0.4 }}
-                    className={`flex-1 ${i >= 8 ? 'bg-primary' : 'bg-secondary-container'}`}
-                    style={{ height: `${h}%` }}
-                  />
-                ))}
-              </div>
-              <div className="flex justify-between mt-2 text-[10px] font-mono text-on-surface-variant">
-                <span>08:00 AM</span><span>INDICATIVE</span><span>04:00 PM</span>
-              </div>
+              {trendPoints.length > 0 ? (() => {
+                const prices = trendPoints.map(p => p.ptPrice ?? 0).filter(p => p > 0);
+                const maxP = Math.max(...prices, 1);
+                const minP = Math.min(...prices);
+                const range = maxP - minP || 1;
+                return (
+                  <>
+                    <div className="h-20 w-full flex items-end gap-1 px-1">
+                      {trendPoints.map((p, i) => {
+                        const val = p.ptPrice ?? 0;
+                        const h = val > 0 ? ((val - minP) / range) * 80 + 20 : 5;
+                        return (
+                          <motion.div
+                            key={i}
+                            initial={{ height: 0 }}
+                            animate={{ height: `${h}%` }}
+                            transition={{ delay: 0.6 + i * 0.04, duration: 0.4 }}
+                            className={`flex-1 ${i >= trendPoints.length - 4 ? 'bg-primary' : 'bg-secondary-container'}`}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div className="flex justify-between mt-2 text-[10px] font-mono text-on-surface-variant">
+                      <span>{trendPoints[0]?.label ?? ''}</span>
+                      <span>PLATINUM SPOT</span>
+                      <span>{trendPoints[trendPoints.length - 1]?.label ?? ''}</span>
+                    </div>
+                  </>
+                );
+              })() : (
+                <div className="h-20 flex items-center justify-center text-[11px] text-outline">
+                  <div className="w-4 h-4 border border-outline-variant border-t-primary rounded-full animate-spin" />
+                </div>
+              )}
             </motion.div>
           </motion.div>
 
